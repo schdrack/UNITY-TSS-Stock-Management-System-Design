@@ -1,64 +1,82 @@
 <?php
-// Enable error reporting
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+require_once '../../config/db.php';
+require_once '../../includes/auth.php';
 
-require_once __DIR__ . '/../../config/db.php';
-require_once __DIR__ . '/../../includes/auth.php';
-require_once __DIR__ . '/../../includes/functions.php';
-
-// Debug connection
-if (!$conn) {
-    die("Database connection failed: " . $conn->connect_error);
+if (!isLoggedIn()) {
+    header('Location: ../../pages/login.php');
+    exit();
 }
 
-redirectIfNotLoggedIn();
+$products = $conn->query("SELECT * FROM Products");
 
-// Debug: Check if products query works
-$products = $conn->query("SELECT * FROM Products ORDER BY PName");
-if (!$products) {
-    die("Products query failed: " . $conn->error);
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Debug POST data
-    echo "<pre>POST Data: ";
-    print_r($_POST);
-    echo "</pre>";
-    
-    $pcode = sanitizeInput($conn, $_POST['pcode'] ?? '');
-    $date = sanitizeInput($conn, $_POST['date'] ?? '');
-    $quantity = (int)sanitizeInput($conn, $_POST['quantity'] ?? 0);
-    $price = (float)sanitizeInput($conn, $_POST['price'] ?? 0);
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $pcode = $conn->real_escape_string($_POST['pcode']);
+    $date = $conn->real_escape_string($_POST['date']);
+    $quantity = $conn->real_escape_string($_POST['quantity']);
+    $price = $conn->real_escape_string($_POST['price']);
     $total = $quantity * $price;
-
-    // Debug SQL
-    $sql = "INSERT INTO ProductOut (PCode, prOut_Date, prOut_Quantity, prOut_unit_Price, prOut_TotalPrice) VALUES (?, ?, ?, ?, ?)";
-    echo "<pre>SQL: $sql</pre>";
     
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        die("Prepare failed: " . $conn->error);
-    }
-    
-    $stmt->bind_param("ssidd", $pcode, $date, $quantity, $price, $total);
-    
-    if ($stmt->execute()) {
-        $_SESSION['success'] = "Stock out recorded successfully!";
-        header("Location: view.php");
+    $sql = "INSERT INTO Productout (ProductOut_id,PCode,prOut_Date,prOut_Quantity,prOut_unit_Price,prOut_TotalPrice	
+) 
+            VALUES ('$PCode', '$prOut_Date', '$prOut_Quantity', '$prOut_unit_Price', '$prOut_TotalPrice')";
+            
+    if ($conn->query($sql)) {
+        header('Location: ../view.php');
         exit();
     } else {
-        die("Execute failed: " . $stmt->error);
+        $error = "Error recording stock in: " . $conn->error;
     }
 }
 ?>
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Add Stock Out - UNITY TSS</title>
-    <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/style.css">
+    <title>Stock Out</title>
+    <link rel="stylesheet" href="../../assets/css/style.css">
 </head>
 <body>
-    <!-- Rest of your HTML remains the same -->
+    <?php include '../../includes/nav.php'; ?>
+    
+    <div class="container">
+        <h1>Record Stock Out</h1>
+        
+        <?php if (isset($error)): ?>
+            <div class="alert alert-danger"><?php echo $error; ?></div>
+        <?php endif; ?>
+        
+        <form method="POST">
+            <div class="form-group">
+                <label>Product</label>
+                <select name="pcode" required>
+                    <option value="">Select Product</option>
+                    <?php while ($product = $products->fetch_assoc()): ?>
+                        <option value="<?php echo $product['PCode']; ?>">
+                            <?php echo $product['PName']; ?>
+                        </option>
+                    <?php endwhile; ?>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" name="date" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Quantity</label>
+                <input type="number" name="quantity" min="1" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Unit Price</label>
+                <input type="number" name="price" min="0.01" step="0.01" required>
+            </div>
+            
+            <button type="submit">Record Stock Out</button>
+            <a href="../view.php" class="btn">Cancel</a>
+        </form>
+    </div>
+    
+    <script src="../../assets/js/script.js"></script>
 </body>
 </html>
